@@ -91,13 +91,81 @@ https://stackoverflow.com/questions/57907817/dyld-library-not-loaded-swiftui-whe
 
 随着 `Xcode` 和 `iOS SDK` 的不断更新，我们作为开发者，面临着一个持续的挑战：确保我们的应用在旧版本的iOS上仍然能够稳定运行。这一挑战的核心在于保持 ***App支持的最低系统版本号*** 与 ***项目依赖的系统库支持最低版本号*** 的一致性。这不仅仅是一个单次的修复问题，而是需要一个系统化的解决方案来持续监控和解决这一问题。以下是实现这一目标的三个关键思路：
 
-1、如何获取到 App 支持的最低系统版本号？
+**1、如何获取到 App 支持的最低系统版本号？**
 
-2、如何获取 App 依赖的系统库列表？
+每一个 `App` 中都会有一个 `info.plist` 文件，这里通过 `plistlib` 读取该 `App` 支持的最低系统版本号及当前 `App` 的版本信息，脚本如下：
 
-3、如何获取这些系统库最低支持的系统版本号？
+```python
+def read_minimum_os_version(app_path):
+    info_plist_path = app_path + "/" + "info.plist"
+    try:
+        with open(info_plist_path, 'rb') as f:
+            data = plistlib.load(f)
+        return data.get('MinimumOSVersion'), data.get('CFBundleShortVersionString'), data.get('CFBundleVersion')
+    except (KeyError, FileNotFoundError):
+        return None
+```
 
 
+
+**2、如何获取 App 依赖的系统库列表？**
+
+这里需要使用到 `otool` 工具的能力，依赖 `bash` 环境，脚本代码如下：
+
+```sh
+#!/bin/bash
+# otool.sh
+
+file_path=$1
+otool -L $file_path
+```
+
+`Python` 通过 `subprocess` 执行 `otool.sh` 并获取依赖系统库列表：
+
+```python
+def system_frameworks_list(app_path):
+    filename = os.path.basename(app_path)
+    filename, extension = os.path.splitext(filename)
+    macho_path = app_path + "/" + filename
+    result = subprocess.run(["sh", "otool.sh", macho_path], stdout=subprocess.PIPE)
+    # 检查命令是否成功执行
+    if result.returncode == 0:
+        # 将输出解码为字符串
+        output_str = result.stdout.decode('utf-8')
+
+        # 打印输出
+        print("\t执行 sh 脚本获取系统列表信息成功")
+        frameworks = extract_frameworks(output_str)
+        return frameworks
+    else:
+        print(f"\t执行脚本失败，退出状态码：{result.returncode}")
+        return None
+```
+
+
+
+**3、如何获取这些系统库最低支持的系统版本号？**
+
+通过查询资料，Apple 是有开放 API 进行查询，查询方式为：https://developer.apple.com/tutorials/data/documentation/{frameworkname}.json
+
+解析可获取对应库的最低支持系统版本号。
+
+需要留意的是，如下库需要过滤：
+
+```python
+def ignore_frameworks():
+    # OpenAL（Open Audio Library）是一个跨平台的开放源代码音频库，它提供了一组接口，
+    # 使得游戏开发者能够更方便地处理音频。
+    # OpenAL 提供了诸如3D声音定位、回声效果、混响效果等功能，使得游戏开发者能够创建更加逼真的音效体验。
+    # https://www.openal.org/platforms/ 查询得到 iOS 开发中是在 Core Audio 中，而 Core Audio从 iOS2就开始支持
+
+    # MobileCoreServices框架使用统一类型标识符（UTI）信息来创建和操作可以在您的应用和其他应用和服务之间交换的数据。
+    # 底层直接引用 CoreServices，MobileCoreServices支持
+    # 支持的最低系统版本，这个框架自 iOS 的早期版本就已经存在，并且随着操作系统的每次更新而得到更新和维护
+
+    # WebKit 和 JavaScriptCore 在 iOS7就开始支持，但是有一些特性API会有版本限制，不再系统库这一层级去考虑
+    return ["OpenAL", "MobileCoreServices", "WebKit", "JavaScriptCore"]
+```
 
 
 
