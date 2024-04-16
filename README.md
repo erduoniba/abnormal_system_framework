@@ -1,4 +1,4 @@
-# iOS依赖库版本一致性检测：确保应用兼容性
+#  iOS依赖库版本一致性检测：确保应用兼容性
 
 ## 一、背景
 
@@ -166,6 +166,10 @@ def ignore_frameworks():
     # WebKit 和 JavaScriptCore 在 iOS7就开始支持，但是有一些特性API会有版本限制，不再系统库这一层级去考虑
     return ["OpenAL", "MobileCoreServices", "WebKit", "JavaScriptCore"]
 ```
+
+工具实现的流程：
+
+![](./assets/flow.jpg)
 
 
 
